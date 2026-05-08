@@ -44,16 +44,14 @@ export default function QuickPricePage() {
   }, [products, search]);
 
   function setRow(productId: string, patch: Partial<DraftRow>) {
-    setDrafts((d) => ({
-      ...d,
-      [productId]: {
-        source: defaultSource,
-        price: '',
-        ...d[productId],
-        ...patch,
-        productId
-      }
-    }));
+    setDrafts((d) => {
+      const merged: DraftRow = Object.assign(
+        { productId, source: defaultSource, price: '' },
+        d[productId] ?? {},
+        patch
+      );
+      return { ...d, [productId]: merged };
+    });
   }
 
   async function submitAll() {
