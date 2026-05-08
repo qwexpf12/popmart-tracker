@@ -47,11 +47,11 @@ export default function QuickPricePage() {
     setDrafts((d) => ({
       ...d,
       [productId]: {
-        productId,
         source: defaultSource,
         price: '',
         ...d[productId],
-        ...patch
+        ...patch,
+        productId
       }
     }));
   }
