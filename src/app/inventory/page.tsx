@@ -230,7 +230,10 @@ function AddInventoryModal({
         sold_at: null,
         sold_price_per_unit: null,
         sold_platform: null,
-        sold_fee: 0
+        sold_fee: 0,
+        sale_method: null,
+        tracking_no: null,
+        buyer_info: null
       });
       onSaved();
     } catch (e: any) {
