@@ -147,10 +147,17 @@ export async function uploadProductImage(file: File): Promise<string> {
   return urlData.publicUrl;
 }
 
-export async function markSold(
-  id: string,
-  patch: { sold_at: string; sold_price_per_unit: number; sold_platform?: string; sold_fee?: number }
-) {
+export interface SellPatch {
+  sold_at: string;
+  sold_price_per_unit: number;
+  sold_platform?: string | null;
+  sold_fee?: number;
+  sale_method?: string | null;
+  tracking_no?: string | null;
+  buyer_info?: string | null;
+}
+
+export async function markSold(id: string, patch: SellPatch) {
   const sb = getSupabase();
   const { data, error } = await sb
     .from('inventory')
@@ -160,4 +167,61 @@ export async function markSold(
     .single();
   if (error) throw error;
   return data as InventoryRow;
+}
+
+export async function markKept(id: string) {
+  const sb = getSupabase();
+  const { error } = await sb.from('inventory').update({ status: 'kept' }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function splitAndSell(id: string, sellQuantity: number, patch: SellPatch) {
+  const sb = getSupabase();
+  const { data: orig, error: e1 } = await sb.from('inventory').select('*').eq('id', id).single();
+  if (e1) throw e1;
+  const row = orig as InventoryRow;
+
+  if (sellQuantity <= 0) throw new Error('出库数量必须大于 0');
+  if (sellQuantity > row.quantity) throw new Error(`出库数量超过该批库存 (${row.quantity})`);
+
+  if (sellQuantity === row.quantity) {
+    return markSold(id, patch);
+  }
+
+  const remaining = row.quantity - sellQuantity;
+  const { error: e2 } = await sb
+    .from('inventory')
+    .update({ quantity: remaining })
+    .eq('id', id);
+  if (e2) throw e2;
+
+  const insertRow = {
+    product_id: row.product_id,
+    acquired_at: row.acquired_at,
+    cost_per_unit: row.cost_per_unit,
+    quantity: sellQuantity,
+    source: row.source,
+    status: 'sold' as const,
+    notes: row.notes,
+    sold_at: patch.sold_at,
+    sold_price_per_unit: patch.sold_price_per_unit,
+    sold_platform: patch.sold_platform ?? null,
+    sold_fee: patch.sold_fee ?? 0,
+    sale_method: patch.sale_method ?? null,
+    tracking_no: patch.tracking_no ?? null,
+    buyer_info: patch.buyer_info ?? null
+  };
+  const { error: e3 } = await sb.from('inventory').insert(insertRow);
+  if (e3) throw e3;
+}
+
+export async function listInventoryByProduct(productId: string): Promise<InventoryRow[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('inventory')
+    .select('*')
+    .eq('product_id', productId)
+    .order('acquired_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as InventoryRow[];
 }

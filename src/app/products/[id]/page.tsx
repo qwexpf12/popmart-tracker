@@ -3,11 +3,18 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getProduct, listPrices, recordPrice } from '@/lib/queries';
-import type { Product, PricePoint, PriceSource } from '@/lib/types';
-import { PRICE_SOURCE_LABELS } from '@/lib/types';
-import { formatYuan, formatDate, todayISO, cx, pctChange } from '@/lib/utils';
+import {
+  getProduct,
+  listPrices,
+  recordPrice,
+  listInventoryByProduct,
+  markKept
+} from '@/lib/queries';
+import type { Product, PricePoint, PriceSource, InventoryRow } from '@/lib/types';
+import { PRICE_SOURCE_LABELS, STATUS_LABELS } from '@/lib/types';
+import { formatYuan, formatDate, todayISO, cx, pctChange, daysBetween } from '@/lib/utils';
 import PriceChart from '@/components/PriceChart';
+import SellModal from '@/components/SellModal';
 
 const SOURCES: PriceSource[] = ['xianyu', 'qiandao', 'dewu', 'manual'];
 
@@ -16,6 +23,8 @@ export default function ProductDetailPage() {
   const id = params.id as string;
   const [product, setProduct] = useState<Product | null>(null);
   const [prices, setPrices] = useState<PricePoint[]>([]);
+  const [inventory, setInventory] = useState<InventoryRow[]>([]);
+  const [sellingRow, setSellingRow] = useState<InventoryRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -28,9 +37,25 @@ export default function ProductDetailPage() {
   const [saving, setSaving] = useState(false);
 
   async function reload() {
-    const [p, ps] = await Promise.all([getProduct(id), listPrices(id, 90)]);
+    const [p, ps, inv] = await Promise.all([
+      getProduct(id),
+      listPrices(id, 90),
+      listInventoryByProduct(id)
+    ]);
     setProduct(p);
     setPrices(ps);
+    setInventory(inv);
+  }
+
+  async function handleKeep(row: InventoryRow) {
+    const ok = confirm(`把这批 ${row.quantity} 件标记为「自留」吗？\n（自留后将不再计入浮盈浮亏）`);
+    if (!ok) return;
+    try {
+      await markKept(row.id);
+      await reload();
+    } catch (e: any) {
+      setErr(e?.message || '操作失败');
+    }
   }
 
   useEffect(() => {
@@ -155,6 +180,85 @@ export default function ProductDetailPage() {
           相同日期 + 来源会覆盖；用作每日「全网最低」的快照。
         </p>
       </section>
+
+      <section className="card p-4">
+        <h2 className="font-medium mb-3">我的库存</h2>
+        {inventory.length === 0 ? (
+          <p className="text-sm text-muted">
+            没有该款式的库存记录。在「库存」页『+ 进货登记』可以添加。
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {inventory.map((r) => {
+              const days = daysBetween(r.acquired_at);
+              return (
+                <li key={r.id} className="py-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm">
+                      <span
+                        className={cx(
+                          'pill mr-2',
+                          r.status === 'holding' && 'bg-accent/10 text-accent',
+                          r.status === 'sold' && 'bg-up/10 text-up',
+                          r.status === 'kept' && 'bg-line text-muted'
+                        )}
+                      >
+                        {STATUS_LABELS[r.status]}
+                      </span>
+                      <span className="font-medium">{r.quantity} 件</span>
+                      <span className="text-muted">
+                        {' '}· 成本 {formatYuan(r.cost_per_unit)}/件 · 进货{' '}
+                        {formatDate(r.acquired_at, 'yyyy-MM-dd')}
+                        {r.status === 'holding' && ` · 压 ${days} 天`}
+                      </span>
+                    </p>
+                    {r.status === 'sold' && (
+                      <p className="text-xs text-muted mt-1">
+                        {formatDate(r.sold_at, 'yyyy-MM-dd')} 出 ·{' '}
+                        {formatYuan(r.sold_price_per_unit)}/件
+                        {r.sold_platform && ` · ${r.sold_platform}`}
+                        {r.sale_method && ` · ${r.sale_method}`}
+                        {r.tracking_no && ` · 单号 ${r.tracking_no}`}
+                        {r.buyer_info && (
+                          <span className="block">买家：{r.buyer_info}</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  {r.status === 'holding' && (
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button
+                        onClick={() => setSellingRow(r)}
+                        className="btn-primary text-xs px-3 py-1"
+                      >
+                        出库
+                      </button>
+                      <button
+                        onClick={() => handleKeep(r)}
+                        className="btn-ghost border border-line text-xs px-3 py-1"
+                      >
+                        自留
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {sellingRow && (
+        <SellModal
+          row={sellingRow}
+          productName={product.name}
+          onClose={() => setSellingRow(null)}
+          onSaved={async () => {
+            setSellingRow(null);
+            await reload();
+          }}
+        />
+      )}
 
       <section className="card p-4">
         <h2 className="font-medium mb-3">最近录入</h2>

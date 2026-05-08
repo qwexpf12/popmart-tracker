@@ -40,10 +40,16 @@ export interface InventoryRow {
   sold_price_per_unit: number | null;
   sold_platform: string | null;
   sold_fee: number;
+  sale_method: string | null;
+  tracking_no: string | null;
+  buyer_info: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export const SALE_METHODS = ['快递', '同城面交', '自取', '无需发货'] as const;
+export type SaleMethod = (typeof SALE_METHODS)[number];
 
 export interface ProductWithLatest extends Product {
   latest_low_price: number | null;
