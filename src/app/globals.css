@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  background: oklch(98% 0.005 280);
+  color: oklch(20% 0.02 280);
+  -webkit-font-smoothing: antialiased;
+}
+
+input, select, textarea, button {
+  font: inherit;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-surface border border-line shadow-[0_1px_2px_rgba(0,0,0,0.03)];
+  }
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-medium transition active:scale-[0.98];
+  }
+  .btn-primary {
+    @apply btn bg-ink text-white hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-ink hover:bg-line/60;
+  }
+  .btn-accent {
+    @apply btn bg-accent text-white hover:opacity-90;
+  }
+  .field {
+    @apply w-full rounded-xl border border-line bg-surface px-3 py-2 outline-none focus:border-ink/40 focus:ring-2 focus:ring-ink/10;
+  }
+  .label {
+    @apply text-sm text-muted mb-1 block;
+  }
+  .pill {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+}
