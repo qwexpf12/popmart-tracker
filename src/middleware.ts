@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { COOKIE_NAME, expectedToken } from '@/lib/auth';
+import { COOKIE_NAME, verifySession } from '@/lib/auth';
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -14,14 +14,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const expected = await expectedToken();
-  if (!expected) {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) {
     return NextResponse.next();
   }
 
-  const got = req.cookies.get(COOKIE_NAME)?.value;
-  if (got === expected) {
-    return NextResponse.next();
+  const cookie = req.cookies.get(COOKIE_NAME)?.value;
+  const userId = await verifySession(cookie, secret);
+  if (userId) {
+    const res = NextResponse.next();
+    res.headers.set('x-user-id', userId);
+    return res;
   }
 
   const url = req.nextUrl.clone();

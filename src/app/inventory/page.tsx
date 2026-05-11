@@ -11,6 +11,7 @@ import {
 import type { ProductWithLatest, InventoryRow, InventoryStatus } from '@/lib/types';
 import { STATUS_LABELS } from '@/lib/types';
 import { formatYuan, formatDate, todayISO, cx, daysBetween } from '@/lib/utils';
+import { fetchCurrentUser } from '@/lib/useCurrentUser';
 
 type PnLRow = InventoryRow & { latest_low_price: number | null; pnl: number; held_days: number };
 
@@ -24,7 +25,8 @@ export default function InventoryPage() {
   const [sellingId, setSellingId] = useState<string | null>(null);
 
   async function reload() {
-    const [ps, ip] = await Promise.all([listProducts(), listInventoryPnL()]);
+    const me = await fetchCurrentUser();
+    const [ps, ip] = await Promise.all([listProducts(), listInventoryPnL(me.user_id)]);
     setProducts(ps);
     setRows(ip);
   }
@@ -224,7 +226,8 @@ function AddInventoryModal({
     }
     setBusy(true);
     try {
-      await createInventory({
+      const me = await fetchCurrentUser();
+      await createInventory(me.user_id, {
         ...form,
         status: 'holding',
         sold_at: null,
@@ -345,7 +348,8 @@ function SellModal({
     e.preventDefault();
     setBusy(true);
     try {
-      await markSold(row.id, form);
+      const me = await fetchCurrentUser();
+      await markSold(me.user_id, row.id, form);
       onSaved();
     } catch (e: any) {
       setErr(e?.message || '保存失败');

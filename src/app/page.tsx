@@ -6,6 +6,7 @@ import { listInventoryPnL, listProducts, listPrices } from '@/lib/queries';
 import type { ProductWithLatest, InventoryRow } from '@/lib/types';
 import { formatYuan, cx, daysBetween } from '@/lib/utils';
 import { hasSupabaseConfig } from '@/lib/supabase';
+import { fetchCurrentUser } from '@/lib/useCurrentUser';
 
 type PnLRow = InventoryRow & { latest_low_price: number | null; pnl: number; held_days: number };
 
@@ -30,7 +31,8 @@ export default function Dashboard() {
     }
     (async () => {
       try {
-        const [ps, ip] = await Promise.all([listProducts(), listInventoryPnL()]);
+        const me = await fetchCurrentUser();
+        const [ps, ip] = await Promise.all([listProducts(), listInventoryPnL(me.user_id)]);
         setProducts(ps);
         setPnl(ip);
 

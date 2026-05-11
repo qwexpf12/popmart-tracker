@@ -5,6 +5,7 @@ import { splitAndSell } from '@/lib/queries';
 import type { InventoryRow, SaleMethod } from '@/lib/types';
 import { SALE_METHODS } from '@/lib/types';
 import { todayISO, formatYuan, cx } from '@/lib/utils';
+import { fetchCurrentUser } from '@/lib/useCurrentUser';
 
 const PLATFORMS = ['闲鱼', '千岛', '得物', '微信好友', '同好群', '微店', '小红书', '其他'];
 
@@ -46,7 +47,8 @@ export default function SellModal({ row, productName, onClose, onSaved }: Props)
     setBusy(true);
     setErr(null);
     try {
-      await splitAndSell(row.id, form.sell_quantity, {
+      const me = await fetchCurrentUser();
+      await splitAndSell(me.user_id, row.id, form.sell_quantity, {
         sold_at: form.sold_at,
         sold_price_per_unit: form.sold_price_per_unit,
         sold_platform: form.sold_platform,

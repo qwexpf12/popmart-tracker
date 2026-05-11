@@ -94,30 +94,40 @@ export async function recordPrice(input: {
   return data as PricePoint;
 }
 
-export async function listInventory(): Promise<InventoryRow[]> {
+export async function listInventory(userId: string): Promise<InventoryRow[]> {
   const sb = getSupabase();
   const { data, error } = await sb
     .from('inventory')
     .select('*')
+    .eq('user_id', userId)
     .order('acquired_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as InventoryRow[];
 }
 
-export async function listInventoryPnL(): Promise<
-  Array<InventoryRow & { latest_low_price: number | null; pnl: number; held_days: number }>
-> {
+export async function listInventoryPnL(
+  userId: string
+): Promise<Array<InventoryRow & { latest_low_price: number | null; pnl: number; held_days: number }>> {
   const sb = getSupabase();
-  const [inv, pnl] = await Promise.all([
-    sb.from('inventory').select('*'),
-    sb.from('v_inventory_pnl').select('*')
-  ]);
-  if (inv.error) throw inv.error;
-  if (pnl.error) throw pnl.error;
-  const map = new Map<string, any>();
-  (pnl.data ?? []).forEach((r: any) => map.set(r.id, r));
-  return ((inv.data ?? []) as InventoryRow[]).map((row) => {
-    const v = map.get(row.id);
+  const { data: inv, error: invErr } = await sb
+    .from('inventory')
+    .select('*')
+    .eq('user_id', userId);
+  if (invErr) throw invErr;
+
+  const ids = (inv ?? []).map((r: any) => r.id);
+  let pnlMap = new Map<string, any>();
+  if (ids.length > 0) {
+    const { data: pnl, error: pnlErr } = await sb
+      .from('v_inventory_pnl')
+      .select('*')
+      .in('id', ids);
+    if (pnlErr) throw pnlErr;
+    (pnl ?? []).forEach((r: any) => pnlMap.set(r.id, r));
+  }
+
+  return ((inv ?? []) as InventoryRow[]).map((row) => {
+    const v = pnlMap.get(row.id);
     return {
       ...row,
       latest_low_price: v?.latest_low_price ?? null,
@@ -127,9 +137,16 @@ export async function listInventoryPnL(): Promise<
   });
 }
 
-export async function createInventory(input: Omit<InventoryRow, 'id' | 'created_at' | 'updated_at'>) {
+export async function createInventory(
+  userId: string,
+  input: Omit<InventoryRow, 'id' | 'created_at' | 'updated_at'>
+) {
   const sb = getSupabase();
-  const { data, error } = await sb.from('inventory').insert(input).select().single();
+  const { data, error } = await sb
+    .from('inventory')
+    .insert({ ...input, user_id: userId })
+    .select()
+    .single();
   if (error) throw error;
   return data as InventoryRow;
 }
@@ -157,27 +174,42 @@ export interface SellPatch {
   buyer_info?: string | null;
 }
 
-export async function markSold(id: string, patch: SellPatch) {
+export async function markSold(userId: string, id: string, patch: SellPatch) {
   const sb = getSupabase();
   const { data, error } = await sb
     .from('inventory')
     .update({ ...patch, status: 'sold' })
     .eq('id', id)
+    .eq('user_id', userId)
     .select()
     .single();
   if (error) throw error;
   return data as InventoryRow;
 }
 
-export async function markKept(id: string) {
+export async function markKept(userId: string, id: string) {
   const sb = getSupabase();
-  const { error } = await sb.from('inventory').update({ status: 'kept' }).eq('id', id);
+  const { error } = await sb
+    .from('inventory')
+    .update({ status: 'kept' })
+    .eq('id', id)
+    .eq('user_id', userId);
   if (error) throw error;
 }
 
-export async function splitAndSell(id: string, sellQuantity: number, patch: SellPatch) {
+export async function splitAndSell(
+  userId: string,
+  id: string,
+  sellQuantity: number,
+  patch: SellPatch
+) {
   const sb = getSupabase();
-  const { data: orig, error: e1 } = await sb.from('inventory').select('*').eq('id', id).single();
+  const { data: orig, error: e1 } = await sb
+    .from('inventory')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .single();
   if (e1) throw e1;
   const row = orig as InventoryRow;
 
@@ -185,17 +217,19 @@ export async function splitAndSell(id: string, sellQuantity: number, patch: Sell
   if (sellQuantity > row.quantity) throw new Error(`出库数量超过该批库存 (${row.quantity})`);
 
   if (sellQuantity === row.quantity) {
-    return markSold(id, patch);
+    return markSold(userId, id, patch);
   }
 
   const remaining = row.quantity - sellQuantity;
   const { error: e2 } = await sb
     .from('inventory')
     .update({ quantity: remaining })
-    .eq('id', id);
+    .eq('id', id)
+    .eq('user_id', userId);
   if (e2) throw e2;
 
   const insertRow = {
+    user_id: userId,
     product_id: row.product_id,
     acquired_at: row.acquired_at,
     cost_per_unit: row.cost_per_unit,
@@ -215,12 +249,16 @@ export async function splitAndSell(id: string, sellQuantity: number, patch: Sell
   if (e3) throw e3;
 }
 
-export async function listInventoryByProduct(productId: string): Promise<InventoryRow[]> {
+export async function listInventoryByProduct(
+  userId: string,
+  productId: string
+): Promise<InventoryRow[]> {
   const sb = getSupabase();
   const { data, error } = await sb
     .from('inventory')
     .select('*')
     .eq('product_id', productId)
+    .eq('user_id', userId)
     .order('acquired_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as InventoryRow[];

@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cx } from '@/lib/utils';
+import { clearCurrentUserCache, useCurrentUser } from '@/lib/useCurrentUser';
 
 const TABS = [
   { href: '/', label: '看板' },
@@ -13,14 +14,18 @@ const TABS = [
 export default function NavBar() {
   const path = usePathname();
   const router = useRouter();
+  const { user } = useCurrentUser();
 
   if (path === '/login') return null;
 
   async function logout() {
     await fetch('/api/logout', { method: 'POST' });
+    clearCurrentUserCache();
     router.replace('/login');
     router.refresh();
   }
+
+  const masked = user ? `${user.username.slice(0, 3)}**` : '';
 
   return (
     <>
@@ -44,6 +49,12 @@ export default function NavBar() {
               </Link>
             );
           })}
+          {user && (
+            <span className="ml-3 inline-flex items-center gap-1.5 rounded-full bg-line/40 px-2.5 py-1 text-xs text-muted">
+              <span className="size-1.5 rounded-full bg-up" aria-hidden />
+              {masked}
+            </span>
+          )}
           <button
             onClick={logout}
             className="ml-2 px-3 py-1.5 rounded-lg text-sm text-muted hover:bg-line/60 transition"
@@ -51,6 +62,23 @@ export default function NavBar() {
             退出
           </button>
         </nav>
+      </header>
+
+      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5 border-b border-line bg-surface/90 backdrop-blur">
+        <Link href="/" className="font-mono text-sm tracking-tight">
+          泡泡 · 行情台
+        </Link>
+        <div className="flex items-center gap-2">
+          {user && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-line/40 px-2 py-0.5 text-xs text-muted">
+              <span className="size-1.5 rounded-full bg-up" aria-hidden />
+              {masked}
+            </span>
+          )}
+          <button onClick={logout} className="text-xs text-muted">
+            退出
+          </button>
+        </div>
       </header>
 
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 backdrop-blur border-t border-line">

@@ -10,6 +10,7 @@ import {
   listInventoryByProduct,
   markKept
 } from '@/lib/queries';
+import { fetchCurrentUser } from '@/lib/useCurrentUser';
 import type { Product, PricePoint, PriceSource, InventoryRow } from '@/lib/types';
 import { PRICE_SOURCE_LABELS, STATUS_LABELS } from '@/lib/types';
 import { formatYuan, formatDate, todayISO, cx, pctChange, daysBetween } from '@/lib/utils';
@@ -37,10 +38,11 @@ export default function ProductDetailPage() {
   const [saving, setSaving] = useState(false);
 
   async function reload() {
+    const me = await fetchCurrentUser();
     const [p, ps, inv] = await Promise.all([
       getProduct(id),
       listPrices(id, 90),
-      listInventoryByProduct(id)
+      listInventoryByProduct(me.user_id, id)
     ]);
     setProduct(p);
     setPrices(ps);
@@ -51,7 +53,8 @@ export default function ProductDetailPage() {
     const ok = confirm(`把这批 ${row.quantity} 件标记为「自留」吗？\n（自留后将不再计入浮盈浮亏）`);
     if (!ok) return;
     try {
-      await markKept(row.id);
+      const me = await fetchCurrentUser();
+      await markKept(me.user_id, row.id);
       await reload();
     } catch (e: any) {
       setErr(e?.message || '操作失败');
